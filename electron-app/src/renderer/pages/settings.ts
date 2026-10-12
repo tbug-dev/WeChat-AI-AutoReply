@@ -1,6 +1,6 @@
 import type { AppContext, PageDefinition } from "../context";
 import { pageHead } from "../context";
-import { banner, button, card, el, field, numberInput, select, switchRow, textInput } from "../ui";
+import { banner, busy, button, card, el, field, numberInput, select, switchRow, textInput } from "../ui";
 
 /**
  * Behaviour, message shaping, storage, and diagnostics.
@@ -41,7 +41,7 @@ export const settingsPage: PageDefinition = {
           onInput: (value) => { pendingPrefix = value; },
         }),
       ]),
-      button("保存前缀", async () => {
+      button("保存前缀", busy(async () => {
         // 1.x 的按钮总是给反馈；这里曾经在没有改动时静默返回，用户会以为按钮坏了。
         if (pendingPrefix === null) {
           ctx.toast("info", "前缀没有改动", "修改输入框后再点一次即可保存。");
@@ -52,7 +52,7 @@ export const settingsPage: PageDefinition = {
         pendingPrefix = null;
         ctx.toast("ok", "前缀已保存", `回复时会以「${saved}」开头。`);
         ctx.rerender();
-      }, "ghost", "btn--sm"),
+      }, "保存中…"), "ghost", "btn--sm"),
     ]));
 
     rows.push(el("div", { class: "sep" }));
@@ -142,7 +142,7 @@ function renderKeywordEditor(ctx: AppContext, keywords: string[]): HTMLElement {
           onInput: (value) => { keywordDraft = value; },
         }),
       ]),
-      button("添加屏蔽词", async () => {
+      button("添加屏蔽词", busy(async () => {
         const value = keywordDraft.trim();
         if (!value) {
           ctx.toast("warn", "请先输入要屏蔽的词", "在上方输入框里填写内容后再点击添加。");
@@ -156,12 +156,12 @@ function renderKeywordEditor(ctx: AppContext, keywords: string[]): HTMLElement {
         keywordDraft = "";
         ctx.toast("ok", `已添加屏蔽词「${value}」`);
         ctx.rerender();
-      }),
-      button("恢复默认", async () => {
+      }, "添加中…")),
+      button("恢复默认", busy(async () => {
         await ctx.invokeConfig({ ignored_keywords: ctx.presets?.ignoredKeywordsDefaults ?? [] });
         ctx.toast("ok", "已恢复默认屏蔽词");
         ctx.rerender();
-      }, "ghost", "btn--sm"),
+      }, "恢复中…"), "ghost", "btn--sm"),
     ]),
     el("div", { class: "hint", text: "内置屏蔽词（按住说话、语音输入文字、发送(S) 等）始终生效，这里的自定义项会追加在其后。" }),
   ]);
@@ -170,14 +170,14 @@ function renderKeywordEditor(ctx: AppContext, keywords: string[]): HTMLElement {
 function renderConfigIo(ctx: AppContext): HTMLElement {
   return el("div", {}, [
     el("div", { class: "row-inline" }, [
-      button("导出配置备份", async () => {
+      button("导出配置备份", busy(async () => {
         const masked = await ctx.invoke("config_masked");
         const result = await window.engine.exportConfig(masked);
         if ((result as { ok?: boolean }).ok) ctx.toast("ok", "已导出配置", String((result as { path?: string }).path));
         else if ((result as { canceled?: boolean }).canceled) ctx.toast("info", "已取消导出");
         else ctx.toast("error", "导出失败", String((result as { error?: string }).error ?? "系统未返回保存路径"));
-      }),
-      button("导入配置", async () => {
+      }, "导出中…")),
+      button("导入配置", busy(async () => {
         const picked = await window.engine.importConfig();
         if (!(picked as { ok?: boolean }).ok) {
           if (!(picked as { canceled?: boolean }).canceled) {
@@ -197,12 +197,12 @@ function renderConfigIo(ctx: AppContext): HTMLElement {
         await ctx.refresh(true);
         ctx.toast("ok", "配置已导入");
         ctx.rerender();
-      }),
-      button("从磁盘重新读取", async () => {
+      }, "导入中…")),
+      button("从磁盘重新读取", busy(async () => {
         ctx.config = await ctx.invoke("config_reload");
         ctx.toast("ok", "已重新读取配置文件");
         ctx.rerender();
-      }, "ghost"),
+      }, "读取中…"), "ghost"),
     ]),
     el("div", { class: "hint", text: "导出的配置会自动隐藏 API Key，可安全分享或附在 issue 中。导入时会原样覆盖所有字段。" }),
   ]);
@@ -211,7 +211,7 @@ function renderConfigIo(ctx: AppContext): HTMLElement {
 function renderDiagnosticsCard(ctx: AppContext): HTMLElement {
   const rows: Node[] = [];
   rows.push(el("div", { class: "row-inline" }, [
-    button("运行环境自检", async () => {
+    button("运行环境自检", busy(async () => {
       try {
         diagnostics = (await ctx.invoke("diagnostics")) as unknown as Record<string, unknown>;
         ctx.toast("ok", "自检完成", "结果已显示在下方。");
@@ -219,8 +219,8 @@ function renderDiagnosticsCard(ctx: AppContext): HTMLElement {
         ctx.toast("error", "自检失败", String(error));
       }
       ctx.rerender();
-    }, "primary"),
-    button("复制诊断信息", async () => {
+    }, "自检中…"), "primary"),
+    button("复制诊断信息", busy(async () => {
       const info = await ctx.invoke("diagnostics");
       try {
         await navigator.clipboard.writeText(JSON.stringify(info, null, 2));
@@ -228,7 +228,7 @@ function renderDiagnosticsCard(ctx: AppContext): HTMLElement {
       } catch {
         ctx.toast("warn", "无法写入剪贴板");
       }
-    }, "ghost"),
+    }, "复制中…"), "ghost"),
   ]));
 
   if (diagnostics) {
@@ -271,7 +271,7 @@ function renderAboutCard(ctx: AppContext): HTMLElement {
       button("打开项目主页", () => void window.engine.openExternal(REPO_URL)),
       button("查看 issue", () => void window.engine.openExternal(`${REPO_URL}/issues`)),
       el("div", { style: "flex:1" }),
-      button("退出应用", async () => {
+      button("退出应用", busy(async () => {
         const confirmed = await ctx.confirm({
           title: "退出应用？",
           body: "守护进程会随应用一起停止，微信将不再自动回复。",
@@ -279,7 +279,7 @@ function renderAboutCard(ctx: AppContext): HTMLElement {
           danger: true,
         });
         if (confirmed) await window.engine.window("close");
-      }, "danger"),
+      }, "退出中…"), "danger"),
     ]),
   ]);
 }

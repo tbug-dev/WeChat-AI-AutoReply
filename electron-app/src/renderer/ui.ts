@@ -64,22 +64,86 @@ export function field(label: string, control: Node, hint?: string, extra?: Node)
   ]);
 }
 
+/**
+ * A button that manages its own busy state.
+ *
+ * Any handler that returns a promise is awaited, and for the duration the button is
+ * disabled and shows a spinner plus an optional "working" label. Doing this centrally
+ * rather than per call site means a new async button cannot forget it, which is exactly
+ * how the silent-button problem arose before.
+ *
+ * Synchronous handlers (navigation, opening a modal) are untouched: they take effect
+ * immediately and a spinner would only flash.
+ */
+/** A click handler that may declare the label to show while it runs. */
+export interface BusyHandler {
+  (): void | Promise<unknown>;
+  /** Shown in place of the label while the returned promise is pending. */
+  busyLabel?: string;
+}
+
+/**
+ * A button that manages its own busy state.
+ *
+ * Any handler that returns a promise is awaited, and for the duration the button is
+ * disabled and shows a spinner plus the handler's own busyLabel. Attaching the label to
+ * the function rather than adding a parameter keeps every call site short and avoids the
+ * positional-argument mistakes that a fifth parameter invites.
+ *
+ * Synchronous handlers (navigation, opening a modal) are untouched: they take effect
+ * immediately and a spinner would only flash.
+ */
 export function button(
   label: string,
-  onClick: () => void,
+  onClick: BusyHandler,
   variant: "default" | "primary" | "danger" | "ghost" = "default",
   extraClass = "",
 ): HTMLButtonElement {
   const variantClass = variant === "default" ? "" : ` btn--${variant}`;
-  return el("button", {
+  const spinner = el("span", { class: "btn__spinner", "aria-hidden": "true" });
+  const labelNode = el("span", { class: "btn__label", text: label });
+  const node = el("button", {
     class: `btn${variantClass}${extraClass ? " " + extraClass : ""}`,
     type: "button",
-    text: label,
-    onclick: (event: Event) => {
-      event.preventDefault();
-      onClick();
-    },
+  }, [spinner, labelNode]);
+
+  node.addEventListener("click", async (event) => {
+    event.preventDefault();
+    if (node.disabled) return;
+
+    const wasDisabled = node.disabled;
+    const busyLabel = onClick.busyLabel;
+    // Mark busy before invoking so a handler that awaits gets a painted spinner frame.
+    node.classList.add("is-busy");
+    node.setAttribute("aria-busy", "true");
+    node.disabled = true;
+    if (busyLabel) labelNode.textContent = busyLabel;
+
+    try {
+      const result = onClick();
+      if (result && typeof (result as Promise<unknown>).then === "function") {
+        await result;
+      }
+    } catch (error) {
+      console.error("[button]", label, error);
+    } finally {
+      // The handler may have re-rendered the page; a detached node needs no restore.
+      if (node.isConnected) {
+        node.classList.remove("is-busy");
+        node.removeAttribute("aria-busy");
+        node.disabled = wasDisabled;
+        labelNode.textContent = label;
+      }
+    }
   });
+
+  return node;
+}
+
+/** Attach a busy label to a handler. */
+export function busy<T extends () => void | Promise<unknown>>(handler: T, label: string): T {
+  (handler as BusyHandler).busyLabel = label;
+  return handler;
 }
 
 export function tag(text: string, kind: "default" | "ok" | "warn" | "bad" | "info" = "default"): HTMLElement {

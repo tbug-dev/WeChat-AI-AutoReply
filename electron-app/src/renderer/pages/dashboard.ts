@@ -1,7 +1,7 @@
 import type { Detection } from "../../shared/protocol";
 import type { AppContext, PageDefinition } from "../context";
 import { pageHead } from "../context";
-import { banner, button, card, el, emptyState, formatDuration, formatTime, metric, select, tag } from "../ui";
+import { banner, busy, button, card, el, emptyState, formatDuration, formatTime, metric, select, tag } from "../ui";
 
 /**
  * Dashboard: live state of WeChat, the daemon, and what the perception layer currently
@@ -30,13 +30,13 @@ function renderWeChatCard(ctx: AppContext): HTMLElement {
       "warn",
       "未检测到微信窗口",
       "请先登录并打开 PC 微信（支持 3.x 与 4.x）。引擎会持续探测，检测到窗口后自动开始工作。",
-      button("尝试启动微信", async () => {
+      button("尝试启动微信", busy(async () => {
         const result = await ctx.invoke("wechat_open");
         if ((result as { ok?: boolean }).ok) ctx.toast("ok", "已请求启动微信");
         else ctx.toast("error", "启动微信失败", String((result as { reason?: string }).reason ?? ""));
         await ctx.refresh(true);
         ctx.rerender();
-      }),
+      }, "启动中…")),
     ));
   }
 
@@ -63,12 +63,12 @@ function renderWeChatCard(ctx: AppContext): HTMLElement {
       await ctx.refresh(true);
       ctx.rerender();
     }),
-    button("最小化微信", async () => {
+    button("最小化微信", busy(async () => {
       await ctx.invoke("wechat_minimize");
       await ctx.refresh(true);
       ctx.rerender();
-    }),
-    button("保存当前截图", async () => {
+    }, "处理中…")),
+    button("保存当前截图", busy(async () => {
       const shot = await ctx.invoke("capture_screenshot", { include_data_url: true });
       if (!shot.ok || !shot.dataUrl) {
         ctx.toast("error", "截图失败", String(shot.reason ?? ""));
@@ -77,7 +77,7 @@ function renderWeChatCard(ctx: AppContext): HTMLElement {
       const saved = await window.engine.saveScreenshot(shot.dataUrl, `wechat-${Date.now()}.png`);
       if ((saved as { ok?: boolean }).ok) ctx.toast("ok", "截图已保存", String((saved as { path?: string }).path));
       else if (!(saved as { canceled?: boolean }).canceled) ctx.toast("error", "保存失败", String((saved as { error?: string }).error ?? ""));
-    }),
+    }, "截取中…")),
   ]));
 
   return card("微信客户端", "窗口状态与几何信息（所有坐标均为物理像素）", rows, statusTag(ctx));
@@ -101,18 +101,18 @@ function renderEngineCard(ctx: AppContext): HTMLElement {
         ctx.toast("error", "操作失败", String(error));
       }
     }, "primary"),
-    button("停止守护", async () => {
+    button("停止守护", busy(async () => {
       await ctx.invoke("engine_stop");
       await ctx.refresh(true);
       ctx.rerender();
-    }, "danger"),
-    button("立即扫描一次", async () => {
+    }, "停止中…"), "danger"),
+    button("立即扫描一次", busy(async () => {
       const result = await ctx.invoke("engine_tick", { force: true });
       const detail = JSON.stringify(result);
       ctx.toast("info", "扫描完成", detail.length > 160 ? detail.slice(0, 160) + "…" : detail);
       await refreshDetection(ctx);
-    }),
-    button("清空对话记忆", async () => {
+    }, "扫描中…")),
+    button("清空对话记忆", busy(async () => {
       const confirmed = await ctx.confirm({
         title: "清空对话记忆",
         body: "将清除引擎为止保存的每个好友的上下文历史。好友会感觉你“忘了”之前的聊天内容。此操作不影响黑名单与白名单。",
@@ -122,7 +122,7 @@ function renderEngineCard(ctx: AppContext): HTMLElement {
       if (!confirmed) return;
       await ctx.invoke("engine_reset_memory", {});
       ctx.toast("ok", "已清空对话记忆");
-    }),
+    }, "清空中…")),
   ]);
 
   const statusTagNode = running

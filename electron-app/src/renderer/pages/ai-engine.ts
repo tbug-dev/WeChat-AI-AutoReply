@@ -1,6 +1,6 @@
 import type { AppContext, PageDefinition } from "../context";
 import { pageHead } from "../context";
-import { banner, button, card, el, field, numberInput, tag, textInput } from "../ui";
+import { banner, busy, button, card, el, field, numberInput, tag, textInput } from "../ui";
 
 /**
  * AI engine settings.
@@ -129,7 +129,7 @@ export const aiEnginePage: PageDefinition = {
     rows.push(el("div", { class: "sep" }));
 
     const actions = el("div", { class: "row-inline" }, [
-      button("保存 API 配置", async () => {
+      button("保存 API 配置", busy(async () => {
         await ctx.invokeConfig({
           openai_api: {
             ...ctx.config!.openai_api,
@@ -141,8 +141,8 @@ export const aiEnginePage: PageDefinition = {
         pendingKey = pendingBase = pendingModel = null;
         ctx.toast("ok", "配置已保存", "守护进程会在下一个巡检周期自动应用。");
         ctx.rerender();
-      }, "primary"),
-      button("检查配置", async () => {
+      }, "保存中…"), "primary"),
+      button("检查配置", busy(async () => {
         const result = await ctx.invoke("test_api");
         if (result.ok) {
           testResult = { ok: true, kind: "ok", text: `地址：${result.endpoint}\n模型：${result.model}\n密钥：${result.keyPreview}` };
@@ -150,8 +150,8 @@ export const aiEnginePage: PageDefinition = {
           testResult = { ok: false, kind: "danger", text: (result.problems ?? [result.reason ?? "未知问题"]).join("\n") };
         }
         ctx.rerender();
-      }),
-      button("真实调用测试", async () => {
+      }, "检查中…")),
+      button("真实调用测试", busy(async () => {
         const result = await ctx.invoke("sandbox_test", { sender: "配置检查", message: "你好，请回复“连接正常”。" });
         if (result.ok) {
           testResult = { ok: true, kind: "ok", text: `模型回复：${result.reply}\n耗时：${result.elapsed} 秒` };
@@ -159,7 +159,7 @@ export const aiEnginePage: PageDefinition = {
           testResult = { ok: false, kind: "danger", text: String(result.message ?? result.reason ?? "调用失败") };
         }
         ctx.rerender();
-      }),
+      }, "调用中…")),
     ]);
     rows.push(actions);
 
@@ -206,13 +206,13 @@ function renderRuntimeCard(ctx: AppContext): HTMLElement {
   const rows2: Node[] = [
     ...rows,
     el("div", { class: "row-inline", style: "margin-top:12px" }, [
-      button("预热 OCR 引擎", async () => {
+      button("预热 OCR 引擎", busy(async () => {
         const result = await ctx.invoke("ocr_warmup");
         if (result.ok) ctx.toast("ok", "OCR 已就绪", "后续首次识别不再有冷启动延迟。");
         else ctx.toast("error", "OCR 加载失败", String(result.reason ?? ""));
         await ctx.refresh(true);
         ctx.rerender();
-      }),
+      }, "加载中…")),
       el("span", { class: "muted", text: "首次识别需要加载约 15MB 的 ONNX 模型，预热可以消除第一次扫描的延迟。" }),
     ]),
   ];

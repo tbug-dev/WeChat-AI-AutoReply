@@ -365,3 +365,39 @@ input[type="range"] { width: 100%; accent-color: var(--brand); }
 .modal__head { padding: 15px 18px; border-bottom: 1px solid var(--line); font-weight: 600; }
 .modal__body { padding: 16px 18px; overflow-y: auto; line-height: 1.7; font-size: 12.5px; }
 .modal__foot { padding: 13px 18px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---------------------------------------------------------------------------
+   Busy state for buttons that wait on a result
+   --------------------------------------------------------------------------- */
+.btn { position: relative; }
+.btn__spinner {
+  display: none;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: currentColor;
+  animation: btn-spin 0.7s linear infinite;
+}
+/* Declared after the variant rules so a primary or danger button keeps its colours
+   while busy, instead of being washed out to a generic disabled grey. */
+.btn.is-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: progress;
+  opacity: 0.85;
+}
+.btn.is-busy .btn__spinner { display: inline-block; }
+/* Only dim a busy button that has no fill of its own. */
+.btn.is-busy:not(.btn--primary):not(.btn--danger) {
+  background: var(--bg-3);
+  border-color: #33404f;
+  color: var(--text-1);
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn__spinner { animation-duration: 2s; }
+}

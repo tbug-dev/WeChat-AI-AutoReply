@@ -1,6 +1,6 @@
 import type { PageDefinition } from "../context";
 import { pageHead } from "../context";
-import { banner, button, card, el, emptyState, select, tag, textInput } from "../ui";
+import { banner, busy, button, card, el, emptyState, select, tag, textInput } from "../ui";
 
 /**
  * Per-friend personas.
@@ -62,7 +62,7 @@ export const personasPage: PageDefinition = {
             ], (value) => { newContact = value; })
           : textInput(newContact, { placeholder: "手动输入好友备注名", onInput: (value) => { newContact = value; } }),
       ]),
-      button("添加", async () => {
+      button("添加", busy(async () => {
         const name = (newContact || candidates[0] || "").trim();
         if (!name) {
           ctx.toast("warn", "请先选择或输入好友名");
@@ -76,7 +76,7 @@ export const personasPage: PageDefinition = {
         newContact = "";
         ctx.toast("ok", `已为「${name}」添加人设`, "点击下方卡片可编辑内容。");
         ctx.rerender();
-      }, "primary"),
+      }, "添加中…"), "primary"),
     ]);
     rows.push(el("div", { class: "field" }, [
       el("label", { text: "新增好友人设" }),
@@ -115,12 +115,12 @@ export const personasPage: PageDefinition = {
               }, "ghost", "btn--sm")),
           ]));
           body.push(el("div", { class: "row-inline", style: "margin-top:10px" }, [
-            button("保存", async () => {
+            button("保存", busy(async () => {
               await ctx.invokeConfig({ friend_personas: { ...personas, [key]: editingText.trim() } });
               editingKey = null;
               ctx.toast("ok", `「${key}」的人设已保存`);
               ctx.rerender();
-            }, "primary", "btn--sm"),
+            }, "保存中…"), "primary", "btn--sm"),
             button("取消", () => {
               editingKey = null;
               ctx.rerender();
@@ -131,18 +131,18 @@ export const personasPage: PageDefinition = {
           body.push(el("div", { class: "row-inline", style: "margin-top:10px" }, [
             inWhitelist ? tag("在白名单中", "ok") : tag("不在白名单中", "warn"),
             el("div", { style: "flex:1" }),
-            button("编辑", () => {
+            button("编辑", busy(() => {
               editingKey = key;
               editingText = personas[key] ?? "";
               ctx.rerender();
-            }, "ghost", "btn--sm"),
-            button("删除", async () => {
+            }, "加载中…"), "ghost", "btn--sm"),
+            button("删除", busy(async () => {
               const next = { ...personas };
               delete next[key];
               await ctx.invokeConfig({ friend_personas: next });
               ctx.toast("info", `已删除「${key}」的人设`);
               ctx.rerender();
-            }, "danger", "btn--sm"),
+            }, "删除中…"), "danger", "btn--sm"),
           ]));
         }
 

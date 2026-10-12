@@ -1,6 +1,6 @@
 import type { PageDefinition } from "../context";
 import { pageHead } from "../context";
-import { banner, button, card, el, editableList, switchRow, tag, textInput } from "../ui";
+import { banner, busy, button, card, editableList, el, switchRow, tag, textInput } from "../ui";
 
 /**
  * Whitelist / blacklist control.
@@ -83,7 +83,7 @@ export const firewallPage: PageDefinition = {
             onInput: (value) => { probeName = value; },
           }),
         ]),
-        button("测试匹配", async () => {
+        button("测试匹配", busy(async () => {
           if (!probeName.trim()) {
             ctx.toast("warn", "请输入要测试的名字");
             return;
@@ -91,7 +91,7 @@ export const firewallPage: PageDefinition = {
           const result = await ctx.invoke("naming_check", { contact: probeName, whitelist: config.whitelist });
           probeResult = { matched: result.matched, canonical: result.canonical, tier: result.tier, isGroup: result.isGroup };
           ctx.rerender();
-        }),
+        }, "匹配中…")),
       ]),
       probeResult
         ? probeResult.isGroup
@@ -151,13 +151,13 @@ export const firewallPage: PageDefinition = {
           },
         }),
         el("div", { class: "row-inline", style: "margin-top:10px" }, [
-          button("恢复默认屏蔽项", async () => {
+          button("恢复默认屏蔽项", busy(async () => {
             const defaults = ctx.presets?.blacklistDefaults ?? [];
             const merged = [...new Set([...config.blacklist, ...defaults])];
             await ctx.invokeConfig({ blacklist: merged });
             ctx.toast("ok", "已恢复默认屏蔽项");
             ctx.rerender();
-          }, "ghost", "btn--sm"),
+          }, "恢复中…"), "ghost", "btn--sm"),
         ]),
       ], tag(String(config.blacklist.length), "bad")),
     ]);

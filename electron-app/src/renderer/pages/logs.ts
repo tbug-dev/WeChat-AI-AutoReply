@@ -1,6 +1,6 @@
 import type { PageDefinition } from "../context";
 import { pageHead } from "../context";
-import { button, card, el, select, tag } from "../ui";
+import { busy, button, card, el, select, tag } from "../ui";
 
 /**
  * Live log viewer.
@@ -73,11 +73,11 @@ export const logsPage: PageDefinition = {
         if (autoScroll) renderBody();
         ctx.rerender();
       }, "ghost", "btn--sm"),
-      button("打开日志文件", async () => {
+      button("打开日志文件", busy(async () => {
         const result = await ctx.invoke("log_open");
         if (!result.ok) ctx.toast("warn", "无法打开日志文件", String(result.reason ?? ""));
-      }, "ghost", "btn--sm"),
-      button("清空", async () => {
+      }, "打开中…"), "ghost", "btn--sm"),
+      button("清空", busy(async () => {
         const confirmed = await ctx.confirm({
           title: "清空日志？",
           body: "日志文件与界面上的记录都会被清空。已发生的问题不会再显示，请先确认没有需要保留的信息。",
@@ -89,7 +89,7 @@ export const logsPage: PageDefinition = {
         lines = [];
         renderBody();
         ctx.toast("ok", "日志已清空");
-      }, "danger", "btn--sm"),
+      }, "清空中…"), "danger", "btn--sm"),
     ]);
 
     const view = el("div", { class: "log" });

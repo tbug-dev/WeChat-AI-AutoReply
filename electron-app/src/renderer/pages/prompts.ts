@@ -1,6 +1,6 @@
 import type { AppContext, PageDefinition } from "../context";
 import { pageHead } from "../context";
-import { banner, button, card, el, tag } from "../ui";
+import { banner, busy, button, card, el, tag } from "../ui";
 
 /**
  * Persona and instruction editor.
@@ -111,7 +111,7 @@ export const promptsPage: PageDefinition = {
     ]);
     rows.push(editor);
 
-    const saveButton = button("保存提示词", async () => {
+    const saveButton = button("保存提示词", busy(async () => {
       const value = textarea.value.trim();
       if (!value) {
         ctx.toast("warn", "提示词不能为空");
@@ -127,7 +127,7 @@ export const promptsPage: PageDefinition = {
       draftDirty = false;
       ctx.toast("ok", "提示词已保存", "下一个巡检周期起对新消息生效。");
       ctx.rerender();
-    }, "primary");
+    }, "保存中…"), "primary");
 
     const revertButton = button("恢复为当前预设", async () => {
       const confirmed = await ctx.confirm({
@@ -142,7 +142,7 @@ export const promptsPage: PageDefinition = {
       ctx.rerender();
     }, "ghost");
 
-    const inspectButton = button("查看实际发送给模型的内容", async () => {
+    const inspectButton = button("查看实际发送给模型的内容", busy(async () => {
       const preview = await ctx.invoke("sandbox_preview_prompt", { sender: "示例好友" });
       const body = el("pre", {
         class: "mono",
@@ -150,7 +150,7 @@ export const promptsPage: PageDefinition = {
         text: preview.systemPrompt,
       });
       await ctx.modal({ title: "实际请求中的 system 提示词", body: "", content: body });
-    }, "ghost");
+    }, "读取中…"), "ghost");
 
     rows.push(el("div", { class: "row-inline" }, [saveButton, revertButton, inspectButton]));
 

@@ -1,7 +1,7 @@
 import type { SandboxResult } from "../../shared/protocol";
 import type { PageDefinition } from "../context";
 import { pageHead } from "../context";
-import { banner, button, card, el, field, switchRow, tag, textInput } from "../ui";
+import { banner, busy, button, card, el, field, switchRow, tag, textInput } from "../ui";
 
 /**
  * Sandbox: try the configured model without touching WeChat.
@@ -99,14 +99,14 @@ export const sandboxPage: PageDefinition = {
         el("div", { class: "list__item" }, [
           el("span", { class: "muted", text: `耗时 ${result.elapsed} 秒 · 模型 ${result.model} · 尝试 ${result.attempts} 次` }),
           el("div", { style: "flex:1" }),
-          button("复制回复", async () => {
+          button("复制回复", busy(async () => {
             try {
               await navigator.clipboard.writeText(result?.reply ?? "");
               ctx.toast("ok", "已复制到剪贴板");
             } catch {
               ctx.toast("warn", "无法写入剪贴板");
             }
-          }, "ghost", "btn--sm"),
+          }, "复制中…"), "ghost", "btn--sm"),
         ]),
       ]));
 
