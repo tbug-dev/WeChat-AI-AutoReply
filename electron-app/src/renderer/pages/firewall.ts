@@ -113,12 +113,17 @@ export const firewallPage: PageDefinition = {
           addLabel: "添加好友",
           emptyText: "白名单为空 —— 当前不会回复任何人",
           onAdd: async (value) => {
-            if (config.whitelist.includes(value)) {
-              ctx.toast("warn", "该好友已在白名单中");
+            const name = value.trim();
+            if (!name) {
+              ctx.toast("warn", "请先输入好友备注名", "填写后点击「添加好友」。名称需要与微信中显示的完全一致。");
               return;
             }
-            await ctx.invokeConfig({ whitelist: [...config.whitelist, value] });
-            ctx.toast("ok", `已添加「${value}」`);
+            if (config.whitelist.includes(name)) {
+              ctx.toast("warn", "该好友已在白名单中", name);
+              return;
+            }
+            await ctx.invokeConfig({ whitelist: [...config.whitelist, name] });
+            ctx.toast("ok", `已添加「${name}」`, "只有名单内的好友会收到自动回复。");
             ctx.rerender();
           },
           onRemove: async (value) => {
@@ -141,6 +146,7 @@ export const firewallPage: PageDefinition = {
           },
           onRemove: async (value) => {
             await ctx.invokeConfig({ blacklist: config.blacklist.filter((item) => item !== value) });
+            ctx.toast("info", `已取消屏蔽「${value}」`);
             ctx.rerender();
           },
         }),

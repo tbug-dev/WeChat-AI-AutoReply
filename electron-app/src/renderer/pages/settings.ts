@@ -42,10 +42,16 @@ export const settingsPage: PageDefinition = {
         }),
       ]),
       button("保存前缀", async () => {
-        if (pendingPrefix === null) return;
+        // 1.x 的按钮总是给反馈；这里曾经在没有改动时静默返回，用户会以为按钮坏了。
+        if (pendingPrefix === null) {
+          ctx.toast("info", "前缀没有改动", "修改输入框后再点一次即可保存。");
+          return;
+        }
         await ctx.invokeConfig({ reply_prefix: pendingPrefix });
+        const saved = pendingPrefix;
         pendingPrefix = null;
-        ctx.toast("ok", "前缀已保存");
+        ctx.toast("ok", "前缀已保存", `回复时会以「${saved}」开头。`);
+        ctx.rerender();
       }, "ghost", "btn--sm"),
     ]));
 
@@ -120,6 +126,7 @@ function renderKeywordEditor(ctx: AppContext, keywords: string[]): HTMLElement {
           title: "移除",
           onclick: async () => {
             await ctx.invokeConfig({ ignored_keywords: keywords.filter((item) => item !== keyword) });
+            ctx.toast("info", `已移除屏蔽词「${keyword}」`);
             ctx.rerender();
           },
         }),
@@ -137,13 +144,17 @@ function renderKeywordEditor(ctx: AppContext, keywords: string[]): HTMLElement {
       ]),
       button("添加屏蔽词", async () => {
         const value = keywordDraft.trim();
-        if (!value) return;
+        if (!value) {
+          ctx.toast("warn", "请先输入要屏蔽的词", "在上方输入框里填写内容后再点击添加。");
+          return;
+        }
         if (keywords.includes(value)) {
-          ctx.toast("warn", "该关键词已存在");
+          ctx.toast("warn", "该关键词已存在", value);
           return;
         }
         await ctx.invokeConfig({ ignored_keywords: [...keywords, value] });
         keywordDraft = "";
+        ctx.toast("ok", `已添加屏蔽词「${value}」`);
         ctx.rerender();
       }),
       button("恢复默认", async () => {
@@ -163,7 +174,8 @@ function renderConfigIo(ctx: AppContext): HTMLElement {
         const masked = await ctx.invoke("config_masked");
         const result = await window.engine.exportConfig(masked);
         if ((result as { ok?: boolean }).ok) ctx.toast("ok", "已导出配置", String((result as { path?: string }).path));
-        else if (!(result as { canceled?: boolean }).canceled) ctx.toast("error", "导出失败", String((result as { error?: string }).error ?? ""));
+        else if ((result as { canceled?: boolean }).canceled) ctx.toast("info", "已取消导出");
+        else ctx.toast("error", "导出失败", String((result as { error?: string }).error ?? "系统未返回保存路径"));
       }),
       button("导入配置", async () => {
         const picked = await window.engine.importConfig();
@@ -200,7 +212,12 @@ function renderDiagnosticsCard(ctx: AppContext): HTMLElement {
   const rows: Node[] = [];
   rows.push(el("div", { class: "row-inline" }, [
     button("运行环境自检", async () => {
-      diagnostics = (await ctx.invoke("diagnostics")) as unknown as Record<string, unknown>;
+      try {
+        diagnostics = (await ctx.invoke("diagnostics")) as unknown as Record<string, unknown>;
+        ctx.toast("ok", "自检完成", "结果已显示在下方。");
+      } catch (error) {
+        ctx.toast("error", "自检失败", String(error));
+      }
       ctx.rerender();
     }, "primary"),
     button("复制诊断信息", async () => {

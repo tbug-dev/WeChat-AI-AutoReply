@@ -178,9 +178,9 @@ export function editableList(
 ): HTMLElement {
   const input = textInput("", { placeholder: options.placeholder });
   const submit = () => {
-    const value = input.value.trim();
-    if (!value) return;
-    options.onAdd(value);
+    // Hand the raw value to the caller: it owns the wording of the validation message,
+    // and an early return here was invisible to the user.
+    options.onAdd(input.value);
     input.value = "";
   };
   input.addEventListener("keydown", (event) => {
