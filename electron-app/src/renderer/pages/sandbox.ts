@@ -62,7 +62,7 @@ export const sandboxPage: PageDefinition = {
     rows.push(el("div", { class: "row-inline" }, [
       switchRow("带上历史对话", useHistory, (value) => { useHistory = value; ctx.rerender(); }, "模拟连续对话的上下文"),
       el("div", { style: "flex:1" }),
-      button(running ? "生成中…" : "触发回复测试", async () => {
+      button(running ? "生成中…" : "触发回复测试", busy(async () => {
         if (running) return;
         if (!message.trim()) {
           ctx.toast("warn", "请输入消息内容");
@@ -81,7 +81,7 @@ export const sandboxPage: PageDefinition = {
           running = false;
           ctx.rerender();
         }
-      }, "primary"),
+      }, "触发中…"), "primary"),
     ]));
 
     rows.push(el("div", { class: "sep" }));

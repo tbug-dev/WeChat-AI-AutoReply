@@ -335,7 +335,13 @@ export function getLogBuffer(): string[] {
  * shows the placeholder, so an in-place refresh does not flash or jump.
  */
 async function mountPage(target: PageDefinition, options: { reset: boolean }): Promise<void> {
-  currentPage?.dispose?.(ctx);
+  // dispose() is a page teardown hook, so it may only run when actually leaving a page.
+  // Calling it on every refresh threw away pages that reset state there — the sandbox
+  // cleared its result in dispose(), so rerender() after a test erased the reply before
+  // it could be drawn.
+  if (options.reset && currentPage && currentPage.id !== target.id) {
+    currentPage.dispose?.(ctx);
+  }
   ctx.clearAllTimers();
   currentPageId = target.id;
   currentPage = target;
