@@ -349,6 +349,21 @@ class Engine:
                 self._status["detection"] = None
             return {"ok": False, "reason": "wechat-not-found"}
 
+        # A minimised WeChat reports its icon rectangle, so capture yields a few dozen
+        # pixels of nothing and OCR returns zero boxes. Observed live: the engine logged
+        # "发现未读红点，正在后台切入" every cycle and never replied, because every later
+        # cycle was reading a blank frame. Restore the window rather than idling.
+        if win32.is_minimized(hwnd):
+            logutil.log("[恢复] 检测到微信处于最小化，正在恢复窗口以便截图识别…")
+            win32.show_window(hwnd, win32.SW_RESTORE)
+            time.sleep(0.6)
+            if win32.is_minimized(hwnd):
+                logutil.get_bus().warn(
+                    "[跳过] 微信仍处于最小化，无法抓取画面。请把微信窗口还原到桌面，"
+                    "或点击总览页的「召唤微信回桌面」。"
+                )
+                return {"ok": False, "reason": "wechat-minimized"}
+
         if not force:
             probe, _rect, scale = win32.grab_window(hwnd, self._dpi_scale)
             if probe is None:
@@ -416,7 +431,7 @@ class Engine:
         # which is the hardest possible thing for a user to report.
         rows_seen = len(analysis.rows)
         unread = sum(1 for row in analysis.rows if row.has_red_badge)
-        logutil.get_bus().debug(
+        logutil.log(
             "[感知] 顶栏=%r 侧栏会话=%d 命中白名单=%d 含未读=%d 待回复=%d 气泡=%d"
             % (
                 analysis.title,
@@ -575,7 +590,8 @@ class Engine:
                 continue
             self._candidate_clicked[row.canonical] = now
             logutil.log(
-                "\n[UNREAD] 发现白名单好友【%s】未读红点，正在后台切入..." % row.canonical
+                "\n[UNREAD] 发现白名单好友【%s】未读红点（行 y=%d），正在后台切入..."
+                % (row.canonical, int(row.y)),
             )
             click_x = layout_mod.sidebar_click_x(layout)
             win32.post_click_client_point(hwnd, click_x, int(row.y))

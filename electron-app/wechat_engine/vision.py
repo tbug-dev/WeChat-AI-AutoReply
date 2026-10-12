@@ -231,13 +231,15 @@ def has_red_badge_by_text_anchor(array: np.ndarray, text_box, layout: Layout) ->
     left = min(point[0] for point in text_box)
     top = min(point[1] for point in text_box)
 
-    pad_x = layout["badge_pad_px"]
-    pad_y = int(layout["badge_pad_px"] * 20.0 / 36.0)
-
-    x1 = max(0, int(left - pad_x))
-    x2 = min(width, max(0, int(left - 3 * layout["scale"])))
-    y1 = max(0, int(top - pad_y))
-    y2 = min(height, int(top + pad_y))
+    # The unread bubble sits on the avatar's top-right corner, which places it above the
+    # name baseline and up to ~60 logical px to its left. The 1.x window (36 * 20 px) was
+    # measured against a different WeChat layout and missed the badge entirely on 4.x: the
+    # sidebar was read correctly but every row reported unread=false.
+    scale = layout["scale"]
+    x1 = max(0, int(left - 64 * scale))
+    x2 = min(width, max(0, int(left - 2 * scale)))
+    y1 = max(0, int(top - 34 * scale))
+    y2 = min(height, int(top + 10 * scale))
     if x2 <= x1 or y2 <= y1:
         return False
     patch = array[y1:y2, x1:x2]

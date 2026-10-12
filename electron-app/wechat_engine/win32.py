@@ -417,11 +417,17 @@ def is_window_visible(hwnd) -> bool:
 
 
 def is_offscreen(hwnd) -> bool:
-    """True only when the window is parked *and* not merely minimised."""
+    """True only when the window is parked off-screen and not merely minimised.
+
+    A minimised window also lives at a far negative coordinate, so the minimised check
+    has to come first. When it did not, the app reported WeChat as "离屏" while Windows
+    had it minimised -- a state the engine cannot capture, which is exactly the kind of
+    mismatch that makes the UI disagree with what perception actually sees.
+    """
+    if is_minimized(hwnd):
+        return False
     rect = get_window_rect(hwnd)
     if not rect:
-        return False
-    if is_minimized(hwnd):
         return False
     return rect[0] < OFFSCREEN_THRESHOLD or rect[1] < OFFSCREEN_THRESHOLD
 
@@ -774,6 +780,12 @@ def grab_window(hwnd, dpi_scale: float = None, allow_screen_fallback: bool = Tru
     height = bottom - top
     if width <= 0 or height <= 0:
         width, height = 1100, 750
+
+    # A minimised window reports its icon rectangle, so the "capture" is a few dozen
+    # pixels of nothing. Returning that as a frame feeds the OCR a blank image and every
+    # downstream decision becomes meaningless, so it is rejected here instead.
+    if is_minimized(hwnd):
+        return None, rect, scale
 
     image = print_window_bitmap(hwnd, width, height)
     if image is not None and _has_content(image):
