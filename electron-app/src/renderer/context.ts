@@ -13,7 +13,8 @@ import { el } from "./ui";
 export interface AppContext {
   invoke<K extends EngineMethodName>(method: K, params?: EngineMethods[K][0]): Promise<EngineMethods[K][1]>;
   refresh(force?: boolean): Promise<void>;
-  invokeConfig(patch: Partial<EngineConfig>): Promise<void>;
+  /** Resolves true when persisted, false when the write failed (already reported). */
+  invokeConfig(patch: Partial<EngineConfig>): Promise<boolean>;
   toast(kind: "info" | "ok" | "warn" | "error", title: string, body?: string): void;
   confirm(options: { title: string; body: string; confirmLabel?: string; danger?: boolean }): Promise<boolean>;
   modal(options: { title: string; body: string; content?: HTMLElement; confirmLabel?: string }): Promise<void>;

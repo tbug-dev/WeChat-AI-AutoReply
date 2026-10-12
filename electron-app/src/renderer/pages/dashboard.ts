@@ -92,13 +92,21 @@ function renderEngineCard(ctx: AppContext): HTMLElement {
   const head = el("div", { class: "row-inline" }, [
     button(running ? (paused ? "继续监听" : "暂停监听") : "启动守护", async () => {
       try {
-        if (!running) await ctx.invoke("engine_start");
-        else if (paused) await ctx.invoke("engine_resume");
-        else await ctx.invoke("engine_pause");
+        if (!running) {
+          await ctx.invoke("engine_start");
+          ctx.toast("ok", "守护进程已启动", "引擎将按巡检间隔扫描微信并回复白名单好友。");
+        } else if (paused) {
+          await ctx.invoke("engine_resume");
+          ctx.toast("ok", "已恢复监听");
+        } else {
+          await ctx.invoke("engine_pause");
+          ctx.toast("info", "已暂停监听", "重新点击可继续；暂停期间不会回复任何消息。");
+        }
         await ctx.refresh(true);
         ctx.rerender();
       } catch (error) {
-        ctx.toast("error", "操作失败", String(error));
+        ctx.toast("error", "启动/暂停失败", String(error));
+        await ctx.refresh(true);
       }
     }, "primary"),
     button("停止守护", busy(async () => {
@@ -120,8 +128,12 @@ function renderEngineCard(ctx: AppContext): HTMLElement {
         danger: true,
       });
       if (!confirmed) return;
-      await ctx.invoke("engine_reset_memory", {});
-      ctx.toast("ok", "已清空对话记忆");
+      try {
+        await ctx.invoke("engine_reset_memory", {});
+        ctx.toast("ok", "已清空对话记忆", "下次回复不再带之前的聊天上下文。");
+      } catch (error) {
+        ctx.toast("error", "清空失败", String(error));
+      }
     }, "清空中…")),
   ]);
 
@@ -164,7 +176,13 @@ function renderEngineCard(ctx: AppContext): HTMLElement {
   rows.push(el("div", { class: "row-inline" }, [
     tag(dryRun ? "演练模式：开启" : "演练模式：关闭", dryRun ? "warn" : "default"),
     button(dryRun ? "关闭演练模式" : "开启演练模式", async () => {
-      await ctx.invoke("engine_set_dry_run", { enabled: !dryRun });
+      try {
+        await ctx.invoke("engine_set_dry_run", { enabled: !dryRun });
+        ctx.toast(!dryRun ? "warn" : "ok", !dryRun ? "演练模式已开启" : "演练模式已关闭",
+          !dryRun ? "完整识别并调用大模型，但不发送任何消息。" : "回复将真实发送。");
+      } catch (error) {
+        ctx.toast("error", "切换演练模式失败", String(error));
+      }
       await ctx.refresh(true);
       ctx.rerender();
     }, "ghost", "btn--sm"),

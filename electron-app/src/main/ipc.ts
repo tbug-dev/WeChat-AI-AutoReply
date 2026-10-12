@@ -130,14 +130,23 @@ export function registerIpc(engine: EngineManager, getWindow: () => BrowserWindo
   // -- config import / export ----------------------------------------------
   ipcMain.handle(IPC.configExport, async (_event, document: Record<string, unknown>) => {
     const window = getWindow();
+    // A silent no-op here is indistinguishable from a broken button, so record why.
+    if (!window || window.isDestroyed()) {
+      console.error('[ipc] config-export refused: no live window to parent the dialog');
+      return { ok: false, error: '主窗口不可用，无法打开保存对话框' };
+    }
     const picked = await dialog.showSaveDialog(window ?? undefined!, {
       title: "导出配置",
       defaultPath: "wechat_config_backup.json",
       filters: [{ name: "JSON", extensions: ["json"] }],
     });
-    if (picked.canceled || !picked.filePath) return { ok: false, canceled: true };
+    if (picked.canceled || !picked.filePath) {
+      console.info('[ipc] config-export cancelled by the user');
+      return { ok: false, canceled: true };
+    }
     try {
       writeFileSync(picked.filePath, JSON.stringify(document, null, 4), "utf8");
+      console.info('[ipc] config-export wrote', picked.filePath);
       return { ok: true, path: picked.filePath };
     } catch (error) {
       return { ok: false, error: String(error) };
@@ -146,6 +155,10 @@ export function registerIpc(engine: EngineManager, getWindow: () => BrowserWindo
 
   ipcMain.handle(IPC.configImport, async () => {
     const window = getWindow();
+    if (!window || window.isDestroyed()) {
+      console.error('[ipc] config-import refused: no live window to parent the dialog');
+      return { ok: false, error: '主窗口不可用，无法打开选择对话框' };
+    }
     const picked = await dialog.showOpenDialog(window ?? undefined!, {
       title: "导入配置",
       properties: ["openFile"],

@@ -62,10 +62,27 @@ const ctx: AppContext = {
     renderRail();
   },
 
-  async invokeConfig(patch: Partial<EngineConfig>) {
-    const updated = await ctx.invoke("config_update", { patch });
-    ctx.config = updated as EngineConfig;
-    renderRail();
+  /**
+   * Persist a configuration change.
+   *
+   * Resolves false instead of throwing when the write fails, and always reports it.
+   * Every page writes through here, so a failed save used to look identical to a
+   * successful one: the page re-rendered and simply still showed the old value.
+   */
+  async invokeConfig(patch: Partial<EngineConfig>): Promise<boolean> {
+    try {
+      const updated = await ctx.invoke("config_update", { patch });
+      ctx.config = updated as EngineConfig;
+      renderRail();
+      return true;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      ctx.toast("error", "设置未能保存", `${detail} — 修改未生效，请重试。`);
+      // Re-read so the UI cannot keep displaying a value that never reached the engine.
+      await ctx.refresh(true);
+      ctx.rerender();
+      return false;
+    }
   },
 
   toast(kind, title, body) {
