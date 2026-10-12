@@ -24,6 +24,22 @@ const TEMPLATES: Array<{ label: string; text: string }> = [
   { label: "默认通用", text: "真人好友模式：语气自然随和、口语化、真诚得体。" },
 ];
 
+/**
+ * Build a friend_personas patch that also describes removals.
+ *
+ * The engine merges maps key by key, so simply omitting a deleted contact leaves the
+ * stored entry in place — which is why the 删除 button appeared to do nothing. A key sent
+ * as null is removed instead.
+ */
+function personasPatch(next: Record<string, string>, previous: Record<string, string>) {
+  const patch: Record<string, string | null> = {};
+  for (const [key, value] of Object.entries(next)) patch[key] = value;
+  for (const key of Object.keys(previous)) {
+    if (!(key in next)) patch[key] = null;
+  }
+  return patch;
+}
+
 export const personasPage: PageDefinition = {
   id: "personas",
   label: "好友人设",
@@ -72,7 +88,7 @@ export const personasPage: PageDefinition = {
           ctx.toast("warn", "该好友已有人设");
           return;
         }
-        await ctx.invokeConfig({ friend_personas: { ...personas, [name]: TEMPLATES[0].text } });
+        await ctx.invokeConfig({ friend_personas: personasPatch({ ...personas, [name]: TEMPLATES[0].text }, personas) as never });
         newContact = "";
         ctx.toast("ok", `已为「${name}」添加人设`, "点击下方卡片可编辑内容。");
         ctx.rerender();
@@ -116,7 +132,7 @@ export const personasPage: PageDefinition = {
           ]));
           body.push(el("div", { class: "row-inline", style: "margin-top:10px" }, [
             button("保存", busy(async () => {
-              await ctx.invokeConfig({ friend_personas: { ...personas, [key]: editingText.trim() } });
+              await ctx.invokeConfig({ friend_personas: personasPatch({ ...personas, [key]: editingText.trim() }, personas) as never });
               editingKey = null;
               ctx.toast("ok", `「${key}」的人设已保存`);
               ctx.rerender();
@@ -139,7 +155,8 @@ export const personasPage: PageDefinition = {
             button("删除", busy(async () => {
               const next = { ...personas };
               delete next[key];
-              await ctx.invokeConfig({ friend_personas: next });
+              // Send the removed key as null; omitting it would be merged back in.
+              await ctx.invokeConfig({ friend_personas: personasPatch(next, personas) as never });
               ctx.toast("info", `已删除「${key}」的人设`);
               ctx.rerender();
             }, "删除中…"), "danger", "btn--sm"),

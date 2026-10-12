@@ -59,6 +59,30 @@ function createWindow(): BrowserWindow {
 
   window.once("ready-to-show", () => window.show());
 
+  // Recalling WeChat has to complete before the process may exit. before-quit cannot do
+  // this: Electron proceeds with shutdown as soon as the listener returns, so the async
+  // recall was killed mid-flight and WeChat stayed parked off-screen. Holding the window
+  // close open is the one place this can actually be awaited.
+  let recallAttempted = false;
+  window.on("close", (event) => {
+    if (recallAttempted) return;
+    event.preventDefault();
+    recallAttempted = true;
+    void (async () => {
+      try {
+        const restored = await engine.restoreWeChat();
+        console.info(restored
+          ? "[main] WeChat recall requested before exit"
+          : "[main] WeChat recall did not complete; the window may still be off-screen");
+      } catch (error) {
+        console.error("[main] WeChat recall failed:", String(error));
+      } finally {
+        // Re-entry guard is already set, so this close proceeds straight through.
+        if (!window.isDestroyed()) window.destroy();
+      }
+    })();
+  });
+
   // External links belong in the user browser, never in an app window.
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
@@ -163,6 +187,9 @@ app.on("before-quit", async (event) => {
   event.preventDefault();
   shuttingDown = true;
   try {
+    // Recall WeChat first: the engine is what knows where the window was parked, and once
+    // the daemon is stopped the user would be left with an invisible WeChat.
+    // The window close handler already recalled WeChat; this only stops the daemon.
     await engine.stop();
   } finally {
     // A fatal error means the process is in an undefined state; a non-zero exit code

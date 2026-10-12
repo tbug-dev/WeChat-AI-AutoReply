@@ -138,14 +138,27 @@ def deep_merge(base: dict, overlay: dict) -> dict:
 
     Lists are replaced wholesale (a whitelist edit is an intentional replacement),
     dicts are merged key-by-key so a partial update cannot drop sibling settings.
+
+    A key whose value is None in the overlay is *deleted* from the result. Without that
+    rule a merge can only add or overwrite: removing a key from a nested dictionary was
+    impossible, so deleting a per-friend persona silently did nothing -- the key was
+    merged straight back in from the value already on disk.
     """
     result = copy.deepcopy(base)
-    for key, value in (overlay or {}).items():
-        if isinstance(value, dict) and isinstance(result.get(key), dict):
-            result[key] = deep_merge(result[key], value)
-        else:
-            result[key] = copy.deepcopy(value)
+    apply_patch(result, overlay)
     return result
+
+
+def apply_patch(target: dict, overlay: dict) -> None:
+    """Merge overlay into target in place, treating None as "delete this key"."""
+    for key, value in (overlay or {}).items():
+        if value is None:
+            target.pop(key, None)
+            continue
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            apply_patch(target[key], value)
+        else:
+            target[key] = copy.deepcopy(value)
 
 
 def default_config() -> dict:

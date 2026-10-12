@@ -113,6 +113,11 @@ class Service:
         return self.store.masked()
 
     def config_update(self, patch: Optional[dict] = None) -> dict:
+        """Merge a partial document.
+
+        A nested key set to None is deleted rather than written; that is how the UI
+        removes an entry from a map such as friend_personas.
+        """
         if not isinstance(patch, dict):
             raise protocol.RpcError(protocol.INVALID_PARAMS, "patch must be an object")
         before = self.store.snapshot()

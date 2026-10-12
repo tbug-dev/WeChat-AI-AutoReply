@@ -339,6 +339,41 @@ export class EngineManager extends EventEmitter {
     });
   }
 
+  /**
+   * Bring WeChat back from the off-screen parking spot, if it is parked there.
+   *
+   * Called on quit: the engine owns the window position, so if the app simply exits the
+   * user is left with a WeChat that is invisible and unreachable until they relaunch it
+   * and ask for it back. Failure is non-fatal — quitting must always be possible.
+   */
+  async restoreWeChat(): Promise<boolean> {
+    // Always ask the engine to recall. The engine inspects the window itself, so the call
+    // is idempotent, and deciding here from a stored flag was fragile: the flag and the
+    // real window position can disagree, and a disagreement meant the window was left
+    // parked off-screen with no way back short of relaunching the app.
+    try {
+      const result = (await this.call(
+        "wechat_offscreen",
+        { hidden: false },
+        { timeoutMs: 25000 },
+      )) as { ok?: boolean; restoredRect?: number[] };
+      if (result?.ok) return true;
+    } catch (error) {
+      console.error("[engine] one-shot WeChat recall failed:", String(error));
+    }
+
+    // Fall back to the live daemon, which may still be up and faster.
+    try {
+      const result = (await this.invoke(
+        "wechat_offscreen",
+        { hidden: false },
+        { timeoutMs: 6000 },
+      )) as { ok?: boolean };
+      return Boolean(result?.ok);
+    } catch {
+      return false;
+    }
+  }
   async stop(timeoutMs = 8000): Promise<void> {
     this.stopping = true;
     const child = this.child;
