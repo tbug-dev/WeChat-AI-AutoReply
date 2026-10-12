@@ -1,7 +1,7 @@
 import type { Detection } from "../../shared/protocol";
 import type { AppContext, PageDefinition } from "../context";
 import { pageHead } from "../context";
-import { banner, busy, button, card, el, emptyState, formatDuration, formatTime, metric, select, tag } from "../ui";
+import { banner, button, busy, card, el, emptyState, formatDuration, formatTime, metric, select, tag } from "../ui";
 
 /**
  * Dashboard: live state of WeChat, the daemon, and what the perception layer currently
@@ -305,32 +305,51 @@ function renderControlCard(ctx: AppContext): HTMLElement {
   return card("运行参数", "影响响应速度与打扰程度", rows);
 }
 
-function renderPreviewCard(ctx: AppContext): HTMLElement {
-  const image = lastPreview
-    ? el("img", { src: lastPreview.dataUrl, alt: "微信窗口实时截图" })
-    : null;
+/**
+ * The live preview owns its DOM.
+ *
+ * It must not depend on the page rerender cycle: the first capture lands after the
+ * initial render, and a rerender triggered by the detection poll would rebuild the
+ * <img> and throw the captured frame away — which is exactly why the preview sat on
+ * "正在获取" forever.
+ */
+function createPreviewPanel(ctx: AppContext): { card: HTMLElement; setImage: (dataUrl: string) => void } {
+  const image = el("img", { alt: "微信窗口实时截图" });
+  const placeholder = el("div", { class: "preview__empty" }, [
+    el("div", { text: "正在获取微信窗口画面…" }),
+    el("div", { class: "muted", text: "首次抓取需要加载识别模型，通常 1 到 3 秒。" }),
+  ]);
+  const frame = el("div", { class: "preview" }, [placeholder]);
+  const stamp = el("span", { class: "muted" });
 
-  const body = image
-    ? el("div", { class: "preview" }, [image])
-    : el("div", { class: "preview" }, [
-        el("div", { class: "preview__empty" }, [
-          el("div", { text: previewEnabled ? "正在获取微信窗口画面…" : "实时预览已暂停" }),
-          detectionError ? el("div", { text: REASON_LABELS[detectionError] ?? detectionError }) : null,
-        ]),
-      ]);
+  function showImage(dataUrl: string): void {
+    if (image.getAttribute("src") !== dataUrl) image.src = dataUrl;
+    if (!image.isConnected) {
+      frame.replaceChildren(image);
+    }
+    stamp.textContent = `更新于 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
+  }
+
+  if (lastPreview?.dataUrl) showImage(lastPreview.dataUrl);
 
   const controls = el("div", { class: "row-inline" }, [
     button(previewEnabled ? "暂停预览" : "开启预览", () => {
-      previewEnabled = !previewEnabled;
-      if (!previewEnabled) lastPreview = null;
+        previewEnabled = !previewEnabled;
+        if (!previewEnabled) {
+          lastPreview = null;
+          image.removeAttribute("src");
+          frame.replaceChildren(el("div", { class: "preview__empty", text: "实时预览已暂停" }));
+        }
       ctx.rerender();
     }, "ghost", "btn--sm"),
-    lastPreview ? el("span", { class: "muted", text: `更新于 ${new Date(lastPreview.at).toLocaleTimeString("zh-CN", { hour12: false })}` }) : null,
+    stamp,
   ]);
 
-  return card("实时预览", previewEnabled ? "每 1.2 秒抓取一次（使用 PrintWindow，离屏或被遮挡同样有效）" : "预览已暂停", [body], controls);
+  return {
+    card: card("实时预览", "每 1.2 秒抓取一次（使用 PrintWindow，离屏或被遮挡同样有效）", [frame], controls),
+    setImage: showImage,
+  };
 }
-
 export const dashboardPage: PageDefinition = {
   id: "dashboard",
   label: "总览",
@@ -342,34 +361,42 @@ export const dashboardPage: PageDefinition = {
     return { text: String(ctx.status?.replies ?? 0), kind: "live" as const };
   },
   render(ctx) {
-    // Reset page-local caches so navigating away and back shows fresh data.
-    lastPreview = null;
+    // Detection is cheap to recollect; the captured frame is not, so it is kept.
     lastDetection = null;
     detectionError = null;
+    const panel = createPreviewPanel(ctx);
 
-    const refreshPreview = async () => {
-      if (!previewEnabled) return;
-      try {
-        const shot = await ctx.invoke("capture_data_url", { max_width: 720 });
-        if (shot.ok && shot.dataUrl) {
-          lastPreview = { dataUrl: shot.dataUrl, at: Date.now() };
-          const image = stageImage();
-          if (image) image.src = shot.dataUrl;
+    // Capture runs on its own cadence and writes straight into the panel.
+    ctx.registerTimer("dashboard-preview", () => {
+      void (async () => {
+        if (!previewEnabled) return;
+        try {
+          const shot = await ctx.invoke("capture_data_url", { max_width: 720 });
+          if (shot.ok && shot.dataUrl) {
+            lastPreview = { dataUrl: shot.dataUrl, at: Date.now() };
+            panel.setImage(shot.dataUrl);
+          }
+        } catch (error) {
+          console.error("[preview]", error);
         }
-      } catch {
-        /* the detection panel reports the underlying reason */
-      }
-    };
+      })();
+    }, 1200);
 
-    ctx.registerTimer("dashboard-preview", () => void refreshPreview(), 1200);
-    ctx.registerTimer("dashboard-detection", () => void refreshDetection(ctx), 2500);
-    void refreshPreview();
-    void refreshDetection(ctx).then(() => ctx.rerender());
+    // The detection poll must not rebuild the page, or the preview frame is discarded.
+    ctx.registerTimer("dashboard-detection", () => {
+      void (async () => {
+        await refreshDetection(ctx);
+        const host = document.querySelector(".preview");
+        if (host) { /* the panel updates itself */ }
+      })();
+    }, 2500);
+
+    void refreshDetection(ctx);
 
     const container = el("div", { class: "page" }, [
       pageHead("总览", "实时掌握微信窗口、守护进程与识别结果。所有检测均使用 PrintWindow 截图，微信被遮挡或离屏时依然有效。"),
       renderEngineCard(ctx),
-      el("div", { class: "grid grid--split" }, [renderPreviewCard(ctx), renderWeChatCard(ctx)]),
+      el("div", { class: "grid grid--split" }, [panel.card, renderWeChatCard(ctx)]),
       renderDetectionCard(ctx),
       renderControlCard(ctx),
     ]);
@@ -377,6 +404,3 @@ export const dashboardPage: PageDefinition = {
   },
 };
 
-function stageImage(): HTMLImageElement | null {
-  return document.querySelector<HTMLImageElement>(".preview img");
-}

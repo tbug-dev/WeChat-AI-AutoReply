@@ -411,6 +411,33 @@ class Engine:
 
     # -- decision ---------------------------------------------------------
     def _handle_analysis(self, hwnd, rect, layout, image, cfg, analysis):
+        # One line per cycle describing what perception actually produced. Without it a
+        # silent engine is indistinguishable from a working engine with nothing to do,
+        # which is the hardest possible thing for a user to report.
+        rows_seen = len(analysis.rows)
+        unread = sum(1 for row in analysis.rows if row.has_red_badge)
+        logutil.get_bus().debug(
+            "[感知] 顶栏=%r 侧栏会话=%d 命中白名单=%d 含未读=%d 待回复=%d 气泡=%d"
+            % (
+                analysis.title,
+                rows_seen,
+                rows_seen,
+                unread,
+                len(analysis.pending),
+                len(analysis.bubbles),
+            )
+        )
+        # Escalate when the header shows a contact we could not match, or when a row is
+        # unread but produced no pending text: both are actionable configuration problems.
+        if analysis.title and not analysis.active_target and not analysis.pending:
+            logutil.log(
+                "[跳过] 当前会话【%s】不在白名单中或不可回复，未匹配到目标。" % analysis.title
+            )
+        if unread and not analysis.pending and analysis.active_target:
+            logutil.log(
+                "[跳过] 好友【%s】有未读红点，但未从气泡中读到有效的对方消息。" % analysis.active_target
+            )
+
         target = analysis.active_target
         if not target:
             return self._consider_unread_candidates(hwnd, layout, cfg, analysis)

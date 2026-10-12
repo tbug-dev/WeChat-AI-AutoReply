@@ -127,24 +127,15 @@ const ctx: AppContext = {
   async navigate(page) {
     const target = enginePages.find((item) => item.id === page) ?? enginePages[0];
     if (target.id === currentPageId) return;
-    currentPage?.dispose?.(ctx);
-    ctx.clearAllTimers();
-    currentPageId = target.id;
-    currentPage = target;
-    renderRail();
-    stage.scrollTop = 0;
-    stage.replaceChildren(el("div", { class: "empty", text: "正在加载…" }));
-    try {
-      const view = await target.render(ctx);
-      // A slow render must not overwrite a page the user already navigated away from.
-      if (currentPageId !== target.id) return;
-      stage.replaceChildren(view);
-    } catch (error) {
-      stage.replaceChildren(el("div", { class: "empty" }, [
-        el("h3", { text: "页面加载失败" }),
-        el("p", { text: String(error) }),
-      ]));
-    }
+    await mountPage(target, { reset: true });
+  },
+
+  async rerender() {
+    // Rebuild the page in place. This used to delegate to navigate(), which returns early
+    // when the target is already current — so every rerender() call was a no-op and the UI
+    // only updated after leaving the page and coming back.
+    const target = currentPage ?? enginePages[0];
+    await mountPage(target, { reset: false });
   },
 
   registerTimer(name, callback, intervalMs) {
@@ -173,9 +164,7 @@ const ctx: AppContext = {
     timers.clear();
   },
 
-  rerender() {
-    void ctx.navigate(currentPageId || enginePages[0].id);
-  },
+
 };
 
 // ---------------------------------------------------------------------------
@@ -338,6 +327,36 @@ export function getLogBuffer(): string[] {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
+
+/**
+ * Render a page into the stage.
+ *
+ * Shared by navigate() and rerender(). Only navigation clears the scroll position and
+ * shows the placeholder, so an in-place refresh does not flash or jump.
+ */
+async function mountPage(target: PageDefinition, options: { reset: boolean }): Promise<void> {
+  currentPage?.dispose?.(ctx);
+  ctx.clearAllTimers();
+  currentPageId = target.id;
+  currentPage = target;
+  renderRail();
+  if (options.reset) {
+    stage.scrollTop = 0;
+    stage.replaceChildren(el("div", { class: "empty", text: "正在加载…" }));
+  }
+  try {
+    const view = await target.render(ctx);
+    // A slow render must not overwrite a page the user has already left.
+    if (currentPageId !== target.id) return;
+    stage.replaceChildren(view);
+  } catch (error) {
+    console.error("[page]", target.id, error);
+    stage.replaceChildren(el("div", { class: "empty" }, [
+      el("h3", { text: "页面加载失败" }),
+      el("p", { text: String(error) }),
+    ]));
+  }
+}
 
 async function boot(): Promise<void> {
   renderRail();
