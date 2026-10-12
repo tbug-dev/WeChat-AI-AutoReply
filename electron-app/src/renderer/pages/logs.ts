@@ -85,10 +85,14 @@ export const logsPage: PageDefinition = {
           danger: true,
         });
         if (!confirmed) return;
-        await ctx.invoke("log_clear");
-        lines = [];
-        renderBody();
-        ctx.toast("ok", "日志已清空");
+        try {
+          await ctx.invoke("log_clear");
+          lines = [];
+          renderBody();
+          ctx.toast("ok", "日志已清空");
+        } catch (error) {
+          ctx.toast("error", "清空日志失败", String(error));
+        }
       }, "清空中…"), "danger", "btn--sm"),
     ]);
 

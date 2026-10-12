@@ -140,8 +140,16 @@ export const firewallPage: PageDefinition = {
           addLabel: "添加屏蔽",
           emptyText: "黑名单为空",
           onAdd: async (value) => {
-            if (config.blacklist.includes(value)) return;
+            if (!value.trim()) {
+              ctx.toast("warn", "请先输入要屏蔽的名称", "填写后点击「添加屏蔽」。");
+              return;
+            }
+            if (config.blacklist.includes(value)) {
+              ctx.toast("warn", "该名称已在黑名单中", value);
+              return;
+            }
             await ctx.invokeConfig({ blacklist: [...config.blacklist, value] });
+            ctx.toast("ok", `已屏蔽「${value}」`, "匹配该名称的会话不会被自动回复。");
             ctx.rerender();
           },
           onRemove: async (value) => {

@@ -268,8 +268,19 @@ function renderAboutCard(ctx: AppContext): HTMLElement {
       el("div", { text: "安全边界：白名单是唯一硬性保证；群聊识别使用名称启发式规则，无法 100% 拦截，请保持白名单模式开启。" }),
     ]),
     el("div", { class: "row-inline", style: "margin-top:12px" }, [
-      button("打开项目主页", () => void window.engine.openExternal(REPO_URL)),
-      button("查看 issue", () => void window.engine.openExternal(`${REPO_URL}/issues`)),
+      button("打开项目主页", busy(async () => {
+        const result = await window.engine.openExternal(REPO_URL);
+        if (!(result as { ok?: boolean }).ok) {
+          ctx.toast("warn", "未能打开浏览器", `请手动访问 ${REPO_URL}`);
+        }
+      }, "打开中…")),
+      button("查看 issue", busy(async () => {
+        const issueUrl = `${REPO_URL}/issues`;
+        const result = await window.engine.openExternal(issueUrl);
+        if (!(result as { ok?: boolean }).ok) {
+          ctx.toast("warn", "未能打开浏览器", `请手动访问 ${issueUrl}`);
+        }
+      }, "打开中…")),
       el("div", { style: "flex:1" }),
       button("退出应用", busy(async () => {
         const confirmed = await ctx.confirm({
@@ -278,7 +289,12 @@ function renderAboutCard(ctx: AppContext): HTMLElement {
           confirmLabel: "退出",
           danger: true,
         });
-        if (confirmed) await window.engine.window("close");
+        if (!confirmed) return;
+        try {
+          await window.engine.window("close");
+        } catch (error) {
+          ctx.toast("error", "退出失败", String(error));
+        }
       }, "退出中…"), "danger"),
     ]),
   ]);
